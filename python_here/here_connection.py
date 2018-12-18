@@ -1,12 +1,15 @@
 #! /usr/env/python
 import requests
 from copy import deepcopy
-from python_here.here_types import CalculateRouteResponse, WayPointParameter
+from python_here.here_types import CalculateRouteResponse, WayPointParameter, Route
 
 
 class HereConnector:
     calc_route_url = "https://route.api.here.com/routing/7.2/calculateroute.json"
     matrix_url = "https://matrix.route.api.here.com/routing/7.2/calculatematrix.json"
+    route_image_url = "https://image.maps.api.here.com/mia/1.6/route"
+    sequence_url = "https://wse.cit.api.here.com/2/findsequence.json"
+
 
     def __init__(self, app_id, app_code):
         self.mode = 'fastest;car;traffic:disabled'
@@ -31,6 +34,78 @@ class HereConnector:
 
         crr = CalculateRouteResponse(r.json())
         return crr
+
+    def find_sequence(self, waypoints):
+        app_data = self.get_initial_appdata()
+
+        waypoint_count = len(waypoints)
+
+        for i, w in enumerate(waypoints):
+            assert isinstance(w, WayPointParameter)
+            if i == 0:
+                app_data['start'] = w.geo_str()
+                continue
+
+            if i == waypoint_count-1:
+                app_data['end'] = w.geo_str()
+                continue
+
+            app_data['destination' + str(i)] = w.geo_str()
+
+        r = requests.get(HereConnector.sequence_url, app_data)
+        if r.status_code != 200:
+            HereConnector.print_error(r)
+            return None
+
+        j = r.json()
+        waypoints = j['results'][0]['waypoints']
+
+        optimized_waypoints = list()
+
+        for w in waypoints:
+            wp = WayPointParameter(w['lat'], w['lng'])
+            optimized_waypoints.append(wp)
+
+        return optimized_waypoints
+
+    def route_to_image(self, route, filename):
+        # https://developer.here.com/documentation/map-image/topics/resource-route.html
+        assert isinstance(route, Route)
+        legs = route.legs
+        print("Number of legs: %i" % len(legs))
+        way_points = list()
+
+        maneuvers = route.get_all_maneuvers()
+        way_point_cnt = len(maneuvers)
+        if way_point_cnt > 120:
+            print("High number of maneuvers (%i), consider sampling" % (len(way_points)))
+
+        way_point_str = ",".join([str(m.position) for m in maneuvers])
+
+        app_data = self.get_initial_appdata()
+        app_data['h'] = 1024
+        app_data['w'] = 1024
+        # app_data['ppi'] = 100  # resolution
+        app_data['t'] = 3  # type (day, night, ...)
+
+        app_data['lc'] = '990000ff'  # line color
+        app_data['lw'] = 10          # line width
+
+        app_data['r'] = way_point_str  # route waypoints, use r0, r1 for multiple routes
+
+        # marker
+        # app_data['m'] = way_point_str
+        # app_data['mlbl'] = 0 # numerical or alphanumerical numbering
+
+        # app_data['f'] = 0  # format 1/jpeg is default
+
+        r = requests.get(HereConnector.route_image_url, app_data)
+        # print(r.url)
+
+        # print r.status_code
+        f = open(filename, 'wb')
+        f.write(r.content)
+        f.close()
 
     # https://developer.here.com/documentation/routing/topics/resource-calculate-matrix.html
     def get_distance_matrix(self, starts, destinations, max_dist_km=-1):

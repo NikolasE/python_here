@@ -2,6 +2,7 @@
 
 from python_here.here_types import WayPointParameter
 
+
 def print_distance_matrix(starts, destinations, matrix):
     topline = 'Distance (km)'
     top_len = len(topline)
@@ -16,3 +17,8 @@ def print_distance_matrix(starts, destinations, matrix):
         print(l)
     print("")
 
+
+def sec_to_hour_min(secs):
+    hours = secs // 3600
+    minutes = (secs - hours*3600)//60
+    return hours, minutes

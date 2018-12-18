@@ -12,6 +12,7 @@ class Names:
 
 
 class Summary:
+    # Summary almost completely consists of optional arguments, not yet implemented
     # https://developer.here.com/documentation/routing/topics/resource-type-route-summary.html
     def __init__(self, d):
         # print(d)
@@ -36,6 +37,7 @@ class Summary:
     def __str__(self):
         return str(self.data)
 
+
 class GeoCoordinate:
     def __init__(self, j):
         self.longitude = j['longitude']
@@ -44,19 +46,22 @@ class GeoCoordinate:
     def __str__(self):
         return "%s,%s" % (self.latitude, self.longitude)
 
+
 class WayPointParameter:
     # https://developer.here.com/documentation/routing/topics/resource-param-type-waypoint.html
     def __init__(self, lat, lng, label=''):
         self.latitude = lat
         self.longitude = lng
-        if label:
-            self.label = label
+        self.label = label
 
     def __str__(self):
         s = "geo!%f,%f" % (self.latitude, self.longitude)
         if self.label:
             s += ';;'+self.label  # empty radius
         return s
+
+    def geo_str(self):
+        return "%s,%s" % (self.latitude, self.longitude)
 
 
 class WayPoint:
@@ -100,8 +105,8 @@ class Route:
 
     def __str__(self):
         maneuver_cnt = sum([len(l.maneuvers) for l in self.legs])
-        return "Route with %i legs with %i maneuvers and distance of %i km" % (len(self.legs), maneuver_cnt,
-                                                                           self.summary.distance//1000.0)
+        km = self.summary.distance//1000.0
+        return "Route with %i legs with %i maneuvers and distance of %i km" % (len(self.legs), maneuver_cnt, km)
 
     def get_all_maneuvers(self):
         maneuvers = list()
@@ -123,10 +128,7 @@ class CalculateRouteResponse:
                 return None
             return self.routes[index]
 
-
         def print_info(self):
             print("RouteResponse with %i routes:" % (len(self.routes)))
-            for i,r in enumerate(self.routes):
+            for i, r in enumerate(self.routes):
                 print("  " + str(i) + ': ' + str(r))
-
-
