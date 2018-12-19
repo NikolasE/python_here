@@ -1,4 +1,4 @@
-#! /usr/env/python
+#! /usr/bin/python3
 
 from python_here.here_types import WayPointParameter
 

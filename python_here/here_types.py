@@ -1,5 +1,4 @@
-#! /usr/env/python
-
+#! /usr/bin/python3
 
 class Names:
     # https://developer.here.com/documentation/routing/topics/resource-type-route.html
@@ -102,6 +101,9 @@ class Route:
         self.summary = Summary(j['summary'])
         self.requested_waypoints = [WayPoint(e) for e in j['waypoint']]
         self.legs = [Leg(e) for e in j['leg']]
+        if 'shape' in j:
+            # should be better for visualization, but too many points
+            self.shape = j['shape']  # ['48.7758376,9.1829574', '48.7759817,9.183079',...]
 
     def __str__(self):
         maneuver_cnt = sum([len(l.maneuvers) for l in self.legs])

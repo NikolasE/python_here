@@ -1,7 +1,12 @@
-#! /usr/env/python
+#! /usr/bin/python3
+
 import requests
 from copy import deepcopy
 from python_here.here_types import CalculateRouteResponse, WayPointParameter, Route
+from python_here.helpers import date_string
+from datetime import datetime
+import json
+import pprint
 
 
 class HereConnector:
@@ -9,7 +14,10 @@ class HereConnector:
     matrix_url = "https://matrix.route.api.here.com/routing/7.2/calculatematrix.json"
     route_image_url = "https://image.maps.api.here.com/mia/1.6/route"
     sequence_url = "https://wse.cit.api.here.com/2/findsequence.json"
+    reverse_geocode_url = "https://reverse.geocoder.api.here.com/6.2/reversegeocode.json"
+    multi_reverse_geocode_url = "https://reverse.geocoder.api.here.com/6.2/multi-reversegeocode.json"
 
+    water_location_types = ['river', 'lake']
 
     def __init__(self, app_id, app_code):
         self.mode = 'fastest;car;traffic:disabled'
@@ -27,6 +35,8 @@ class HereConnector:
             assert isinstance(p, WayPointParameter)
             app_data['waypoint' + str(i)] = str(p)
 
+        app_data['routeAttributes'] = 'waypoints,summary,legs,shape'
+
         r = requests.get(HereConnector.calc_route_url, app_data)
         if r.status_code != 200:
             HereConnector.print_error(r)
@@ -35,7 +45,29 @@ class HereConnector:
         crr = CalculateRouteResponse(r.json())
         return crr
 
-    def find_sequence(self, waypoints):
+    def get_public_transport_route(self, start, end):
+        assert isinstance(start, WayPointParameter)
+        assert isinstance(end, WayPointParameter)
+        app_data = deepcopy(self.app_data_dict)
+
+        # TODO: walking or driving to closest station?
+        app_data['mode'] = 'fastest;publicTransport'
+        app_data['waypoint0'] = str(start)
+        app_data['waypoint1'] = str(end)
+        app_data['combineChange'] = 'true'
+        app_data['departure'] = date_string(datetime(2018, 12, 18, 12, 00))
+        app_data['alternatives'] = 5  # up to N alternatives
+
+        r = requests.get(HereConnector.calc_route_url, app_data)
+
+        if r.status_code != 200:
+            HereConnector.print_error(r)
+            return None
+
+        crr = CalculateRouteResponse(r.json())
+        return crr
+
+    def optimize_sequence(self, waypoints):
         app_data = self.get_initial_appdata()
 
         waypoint_count = len(waypoints)
@@ -72,7 +104,7 @@ class HereConnector:
         # https://developer.here.com/documentation/map-image/topics/resource-route.html
         assert isinstance(route, Route)
         legs = route.legs
-        print("Number of legs: %i" % len(legs))
+        # print("Number of legs: %i" % len(legs))
         way_points = list()
 
         maneuvers = route.get_all_maneuvers()
@@ -94,8 +126,8 @@ class HereConnector:
         app_data['r'] = way_point_str  # route waypoints, use r0, r1 for multiple routes
 
         # marker
-        # app_data['m'] = way_point_str
-        # app_data['mlbl'] = 0 # numerical or alphanumerical numbering
+        app_data['m'] = way_point_str
+        app_data['mlbl'] = 0 # numerical or alphanumerical numbering
 
         # app_data['f'] = 0  # format 1/jpeg is default
 
@@ -115,6 +147,10 @@ class HereConnector:
         for i, p in enumerate(starts):
             assert isinstance(p, WayPointParameter)
             app_data['start' + str(i)] = str(p)
+
+        # TODO: check if iterable
+        if not isinstance(destinations, list):
+            destinations = [destinations]
 
         for i, p in enumerate(destinations):
             assert isinstance(p, WayPointParameter)
@@ -154,5 +190,91 @@ class HereConnector:
 
     @staticmethod
     def print_error(response):
-        print(response.json()['details'])
-        print(response.json()['additionalData'])
+        # print(response.json())
+        try:
+            print(response.json()['Details'])
+            print(response.json()['AdditionalData'])
+        except KeyError:
+            print(response.json()['details'])
+            print(response.json()['additionalData'])
+
+    def is_water(self, waypoint, max_dist_m=0):
+        # example for reverse geo lookup for single location        assert isinstance(waypoint, WayPointParameter)
+        app_data = self.get_initial_appdata()
+        app_data['prox'] = waypoint.geo_str()
+        app_data['mode'] = 'retrieveLandmarks'
+
+        r = requests.get(HereConnector.reverse_geocode_url, app_data)
+        if r.status_code != 200:
+            HereConnector.print_error(r)
+            print(r.json())
+
+            return None
+
+        views = r.json()['Response']['View']
+        if not views:
+            return False
+
+        results = views[0]['Result']
+        for r in results:
+            if r['Distance'] > max_dist_m:
+                continue
+            loc_type = r['Location']['LocationType']
+            if loc_type in ['river', 'lake']:
+                return True
+
+        return False
+
+
+    def is_water_multi(self, waypoints, max_dist_m=0):
+        # example for multi-request reverse geocoding
+        # https://developer.here.com/documentation/geocoder/topics/resource-multi-reverse-geocode.html
+
+        app_data = self.get_initial_appdata()
+        app_data['mode'] = 'retrieveLandmarks'
+        app_data['maxresults'] = 5
+
+        headers = {'Content-Type': 'application/xml; charset=utf8'}
+
+        data = str()
+        for w in waypoints:
+            assert isinstance(w, WayPointParameter)
+            data += "prox=%s\n" % (w.geo_str())
+
+        r = requests.post(HereConnector.multi_reverse_geocode_url,
+                          headers=headers,
+                          params=app_data,
+                          data=data  # "id=0023&prox=52.5309,13.3845,200"  # radius is ignored??
+                          )
+
+        if r.status_code != 200:
+            HereConnector.print_error(r)
+            print(r.json())
+            return None
+
+        is_water_list = list()
+
+        pp = pprint.PrettyPrinter(indent=1)
+        # pp.pprint(r.json())
+        items = r.json()['Response']['Item']
+        for item in items:
+            # pp.pprint(item)
+
+            is_water = 0
+
+            # print(len(item['Result']))
+            for r in item['Result']:
+                dist = r['Distance']
+                # negative distance if point is within polygon
+
+                if dist > max_dist_m:
+                    continue
+                location_type = r['Location']['LocationType']
+                if location_type in self.water_location_types:
+                    is_water = -(self.water_location_types.index(location_type)+1)  # encode water type
+                    # print("Dist to water: %f" % (dist))
+                    # pp.pprint(r)
+                    break
+
+            is_water_list.append(is_water)
+        return is_water_list

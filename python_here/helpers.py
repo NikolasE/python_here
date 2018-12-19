@@ -1,7 +1,12 @@
-#! /usr/env/python
+#! /usr/bin/python3
 
 from python_here.here_types import WayPointParameter
+import datetime
 
+
+def date_string(d):
+    assert isinstance(d, datetime.datetime)
+    return d.strftime('%Y-%m-%dT%H:%M:%S')
 
 def print_distance_matrix(starts, destinations, matrix):
     topline = 'Distance (km)'
