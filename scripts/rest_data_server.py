@@ -3,7 +3,7 @@
 # This is rather a Hack to get the csv file into the javascript-application
 # TODO: accept filename as  get-parameter and provide list of possible files
 
-from flask import Flask, Response
+from flask import Flask, Response, request
 
 app = Flask(__name__)
 
@@ -15,6 +15,18 @@ response.headers.add('Access-Control-Allow-Origin', '*')
 
 @app.route('/data', methods=['GET', 'POST'])
 def get_data():
+    print(request.args)
+
+    try:
+        filename = request.args['file']
+    except KeyError:
+        filename = '../example_data/munich_public_large_square.txt'
+
+    # filename = '../example_data/munich_public_large_square.txt'
+    content = open(filename).read()
+    response = Response(content, mimetype="text/html")
+    response.headers.add('Access-Control-Allow-Origin', '*')
+
     return response
 
 
