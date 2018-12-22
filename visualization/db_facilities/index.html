@@ -1,16 +1,3 @@
-
-<!--Marker on the Map-->
-
-<!--Display a map highlighting points of interest-->
-
-<!--This example displays a moveable map of Europe, including markers highlighting the locations of the captials of France, Italy, Germany, Spain and the United Kingdom.-->
-<!--Code-->
-
-<!--Default markers are created by using the H.map.Marker class without specifying an icon and passing in a location only.-->
-
-<!--JavaScript-->
-<!--JS + HTML-->
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -38,7 +25,6 @@
                 url: 'http://localhost:8080/data?file=' + path,
                 type: 'GET',
                 crossDoman: true,
-                // data: {'file': path}, // ???
                 async: false,
                 success : function(data) {
                     return_value = data;
@@ -50,7 +36,6 @@
 
     function addMarkerToGroup(group, icon, coordinate, html) {
         var marker = new H.map.Marker(coordinate, {icon: icon});
-        // add custom data to the marker
         marker.setData(html);
         group.addObject(marker);
     }
@@ -101,9 +86,6 @@
 
         for (let i=0; i<lines.length; i++) {
             let spl = lines[i].split(',');
-            // console.log(spl);
-
-            // break;
 
             let pos = {lat: Number(spl[5]), lng: Number(spl[6])};
             let description = spl[2];
@@ -120,18 +102,11 @@
             }
 
             var m = new H.map.Marker(pos,{icon: icon});
-            // var m = new H.map.Marker(pos);
 
             addMarkerToGroup(group, icon, pos,
                 '<div><a>'+spl[0]+'</a></div>' +
                 '<div>'+description+'</div>');
-
-
-            // console.log(m);
-            // map.addObject(m);
-
         }
-
     }
 
     function addMarkersToMap(map) {
